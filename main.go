@@ -62,17 +62,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.width = w
 		m.height = h
+
+		padding := 2
+		height := 6
+		m.toolbar.height = height
+		//	m.toolbar.width = w - (2 * padding)
+		toolbarStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			Width(m.width-(2*padding)).
+			Padding(height-5, 0).
+			Align(lipgloss.Center)
+
 		if w > 0 && h > 0 {
-			m.matrix = makeMatrix(w, h-m.toolbar.height-1)
+			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 		}
 
-		//setting up toolbar
-		//PARAMS
-		padding := 2
-		height := 5
-		m.toolbar.height = height
-		m.toolbar.width = w - (2 * padding)
-		toolbarStyle.Width(w - (2 * padding))
 	case tea.MouseMsg:
 		m.mouseX = msg.X
 		m.mouseY = msg.Y
@@ -92,7 +96,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					if m.clicking {
 						if msg.Y < len(m.matrix) { // you never know ... could be a weird mouse spasm that would cause out of bounds and crash, so this is just in case
-							m.matrix[m.mouseY+1+m.toolbar.height][m.mouseX] = cursorStyle.Render(m.brush)
+							m.matrix[m.mouseY+-+m.toolbar.height][m.mouseX] = cursorStyle.Render(m.brush)
 						}
 					}
 				}
@@ -133,17 +137,27 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Center, m.toolbarView(), final)
 }
 
+type colorOption struct {
+	color string
+	val   string
+}
+
 var toolbar = struct {
-	colors  map[string]string
-	strokes []string
-	width   []string
+	colors       []colorOption
+	strokes      []string
+	width        []string
+	padding      string
+	interPadding string
 }{
-	colors: map[string]string{
-		"red":   "#ff0000",
-		"blue":  "#0000ff",
-		"green": "#00ff00"},
-	strokes: []string{"#", ".", "-"},
-	width:   []string{"◼", "◼◼", "◼◼◼"},
+	colors: []colorOption{
+		{color: "red", val: "#ff0000"},
+		{color: "blue", val: "#0000ff"},
+		{color: "green", val: "#00ff00"},
+	},
+	strokes:      []string{"#", ".", "-"},
+	width:        []string{"◼", "◼◼", "◼◼◼"},
+	padding:      "    ",
+	interPadding: " ",
 }
 
 type toolbarModel struct {
@@ -155,22 +169,25 @@ var toolbarStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
 
 func (m model) toolbarView() string {
 	// colors
+
 	colorChar := "⬤"
-	colorStr := ""
+	colorStr := toolbar.padding
+
 	for _, color := range toolbar.colors {
-		colorStr = colorStr + lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(colorChar)
+		colorStr = colorStr + toolbar.interPadding + toolbar.interPadding + lipgloss.NewStyle().Foreground(lipgloss.Color(color.val)).Render(colorChar)
 	}
-
-	strokeStr := ""
-
+	colorStr += toolbar.padding
+	strokeStr := toolbar.padding
 	for _, stroke := range toolbar.strokes {
-		strokeStr = strokeStr + " " + stroke
+		strokeStr = strokeStr + toolbar.interPadding + stroke
 	}
+	strokeStr += toolbar.padding
 
-	widthStr := ""
+	widthStr := toolbar.padding
 	for _, width := range toolbar.width {
-		widthStr = widthStr + " " + width
+		widthStr = widthStr + toolbar.interPadding + width
 	}
-	return "    erawera"
+	widthStr += toolbar.padding
+
 	return toolbarStyle.Render(lipgloss.JoinHorizontal(lipgloss.Center, colorStr, strokeStr, widthStr))
 }
