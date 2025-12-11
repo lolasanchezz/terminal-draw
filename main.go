@@ -78,16 +78,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = w
 		m.height = h
 
-		padding := 2
-		height := 6
+		//padding := 2
+		height := 5
 		m.toolbar.height = height
 		//	m.toolbar.width = w - (2 * padding)
 		toolbarStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			Width(m.width-(2*padding)).
-			Padding(height-5, 0).
+			Padding(1, 0). // 1 line top, 1 line bottom
+			Height(3).
 			Align(lipgloss.Center)
-
 		if w > 0 && h > 0 {
 			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 		}
@@ -179,7 +178,7 @@ type toolbarModel struct {
 	visibleElements []string
 }
 
-var toolbarStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
+var toolbarStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Background(lipgloss.Color("#485356"))
 
 func (m model) toolbarInit() model {
 	m.toolbar.visibleElements = []string{"colors", "strokes", "width"}
@@ -203,6 +202,7 @@ func (m model) toolbarView() string {
 			finalArr = append(finalArr, (toolbar.interPadding + val))
 		}
 	}
+	finalArr = append(finalArr, toolbar.padding)
 
 	//calculating hitboxes
 	finalStr := lipgloss.JoinHorizontal(lipgloss.Center, finalArr...)
@@ -238,7 +238,6 @@ func (m model) toolbarView() string {
 			}
 		}
 	}
-
 	return toolbarStyle.Render(finalStr)
 }
 
@@ -249,8 +248,8 @@ func (m model) toolbarUpdate(msg tea.Msg) (model, tea.Cmd) {
 		case tea.MouseActionPress:
 			for name, hitbox := range m.toolbar.hitboxes {
 				for i, xCoord := range hitbox {
-					if (msg.X == xCoord) || (msg.X+1 == xCoord) || (msg.X-1 == xCoord) { //&& (msg.Y == m.toolbar.height/2-1) {
-						m.toolbar.readHitboxes(name, xCoord, i)
+					if ((msg.X == xCoord) || (msg.X+1 == xCoord) || (msg.X-1 == xCoord)) && (msg.Y == m.toolbar.height/2-1) {
+						m.readHitboxes(name, xCoord, i)
 					}
 				}
 			}
@@ -260,11 +259,12 @@ func (m model) toolbarUpdate(msg tea.Msg) (model, tea.Cmd) {
 	return m, nil
 }
 
-func (t toolbarModel) readHitboxes(key string, x int, i int) {
+func (m *model) readHitboxes(key string, x int, i int) {
 	//manual implementations for each thing that has to change within the hitbox
 	switch key {
 	case "colors":
 		cursorStyle = cursorStyle.Foreground(lipgloss.Color(toolbar.elements[0].values[i]))
-
+	case "strokes":
+		m.brush = toolbar.elements[1].values[i]
 	}
 }
