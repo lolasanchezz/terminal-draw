@@ -98,9 +98,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Action {
 		case tea.MouseActionPress:
 			//checking whether the action was within toolbar or easel
-			if msg.X > m.width+1 {
-				m, _ = m.toolbarUpdate(msg)
-			}
+
+			m, _ = m.toolbarUpdate(msg)
+
 			m.clicking = true
 		case tea.MouseActionRelease:
 			m.clicking = false
@@ -165,11 +165,11 @@ var toolbar = struct {
 }{
 	elements: []toolbarEntry{
 		{name: "colors", values: []string{"#ff0000", "#0000ff", "#00ff00"}},
-		{name: "strokes", values: []string{"#", ".", "-"}},
+		{name: "strokes", values: []string{"#", ".", "-", "█"}},
 		{name: "width", values: []string{"◼", "◼◼", "◼◼◼"}},
 	},
 	padding:      "    ",
-	interPadding: " ",
+	interPadding: "   ",
 }
 
 type toolbarModel struct {
@@ -194,7 +194,7 @@ func (m model) toolbarView() string {
 	finalArr := []string{toolbar.padding}
 	//special case for colors
 	for _, color := range toolbar.elements[0].values {
-		finalArr = append(finalArr, (toolbar.interPadding + toolbar.interPadding + lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(colorChar)))
+		finalArr = append(finalArr, (lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(colorChar)), toolbar.interPadding)
 	}
 
 	for _, elem := range toolbar.elements[1:] {
@@ -207,31 +207,34 @@ func (m model) toolbarView() string {
 	//calculating hitboxes
 	finalStr := lipgloss.JoinHorizontal(lipgloss.Center, finalArr...)
 
-	lenOfStrs := 0
-	for _, str := range finalArr {
-		lenOfStrs += lipgloss.Width(str)
-	}
-	offset := m.width/2 - (lenOfStrs / 2) + lipgloss.Width(toolbar.padding)*2 - 1
+	lenOfStrs := lipgloss.Width(finalStr)
+
+	offset := m.width/2 - (lenOfStrs / 2) + lipgloss.Width(toolbar.padding)
+
 	for _, element := range toolbar.elements {
 		m.toolbar.hitboxes[element.name] = []int{}
 		for _, char := range element.values {
+			rendered := ""
 			var charLen int
 			if element.name == "colors" {
-				charLen = lipgloss.Width(colorChar)
+				rendered = toolbar.interPadding +
+					lipgloss.NewStyle().Foreground(lipgloss.Color(char)).Render(colorChar)
 			} else {
-				charLen = lipgloss.Width(char)
+				rendered = toolbar.interPadding + char
 			}
+
+			charLen = lipgloss.Width(rendered)
 			m.toolbar.hitboxes[element.name] = append(m.toolbar.hitboxes[element.name], offset)
-			offset += (charLen + lipgloss.Width(toolbar.interPadding))
+			offset += charLen
 		}
-		offset += lipgloss.Width(toolbar.padding) * 2
+		offset += lipgloss.Width(toolbar.padding)*2 + lipgloss.Width(toolbar.interPadding)
 	}
 
 	//for TESTING
 	if len(m.matrix) != 0 {
 		for _, xArr := range m.toolbar.hitboxes {
 			for _, x := range xArr {
-				m.matrix[30][x] = "*"
+				m.matrix[0][x] = "*"
 			}
 		}
 	}
@@ -243,11 +246,11 @@ func (m model) toolbarUpdate(msg tea.Msg) (model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		switch msg.Action {
-		case tea.MouseActionMotion:
+		case tea.MouseActionPress:
 			for name, hitbox := range m.toolbar.hitboxes {
-				for _, xCoord := range hitbox {
-					if msg.X == xCoord { //&& (msg.Y == m.toolbar.height/2-1) {
-						log.Print(name)
+				for i, xCoord := range hitbox {
+					if (msg.X == xCoord) || (msg.X+1 == xCoord) || (msg.X-1 == xCoord) { //&& (msg.Y == m.toolbar.height/2-1) {
+						m.toolbar.readHitboxes(name, xCoord, i)
 					}
 				}
 			}
@@ -255,4 +258,13 @@ func (m model) toolbarUpdate(msg tea.Msg) (model, tea.Cmd) {
 
 	}
 	return m, nil
+}
+
+func (t toolbarModel) readHitboxes(key string, x int, i int) {
+	//manual implementations for each thing that has to change within the hitbox
+	switch key {
+	case "colors":
+		cursorStyle = cursorStyle.Foreground(lipgloss.Color(toolbar.elements[0].values[i]))
+
+	}
 }
