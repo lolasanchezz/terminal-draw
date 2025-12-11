@@ -30,6 +30,7 @@ func main() {
 		toolbar: toolbarModel{
 			hitboxes:        make(map[string][]int),
 			visibleElements: []string{"colors", "strokes", "width"},
+			strokeHeight:    1,
 		},
 	}
 	f, err := tea.LogToFile("debug.log", "debug")
@@ -47,8 +48,7 @@ func main() {
 }
 
 func (m model) Init() tea.Cmd {
-	m.toolbar.visibleElements = []string{"colors", "strokes", "width"}
-	m.toolbar.hitboxes = make(map[string][]int)
+	m.toolbarInit()
 	return func() tea.Msg { return initCmd{} }
 }
 
@@ -105,13 +105,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clicking = false
 		case tea.MouseActionMotion:
 			//checking whether the action was within toolbar or easel
+
 			if msg.X < len(m.matrix[0]) { //just in case
 				if msg.Y < m.toolbar.height {
 					m, _ = m.toolbarUpdate(msg)
 				} else {
 					if m.clicking {
-						if msg.Y < len(m.matrix) { // you never know ... could be a weird mouse spasm that would cause out of bounds and crash, so this is just in case
-							m.matrix[m.mouseY-m.toolbar.height][m.mouseX-1] = cursorStyle.Render(m.brush)
+						if msg.Y < len(m.matrix) {
+							if m.toolbar.strokeHeight == 1 {
+								m.matrix[m.mouseY-m.toolbar.height][m.mouseX-1] = cursorStyle.Render(m.brush)
+							} else {
+								for i := range m.toolbar.strokeHeight {
+									for j := range m.toolbar.strokeHeight {
+										m.matrix[m.mouseY-m.toolbar.height-i][m.mouseX-1-j] = cursorStyle.Render(m.brush)
+									}
+								}
+							}
+
 						}
 					}
 				}
@@ -163,9 +173,9 @@ var toolbar = struct {
 	interPadding string
 }{
 	elements: []toolbarEntry{
-		{name: "colors", values: []string{"#ff0000", "#0000ff", "#00ff00"}},
+		{name: "colors", values: []string{"#ff0000", "#0000ff", "#00ff00", "#ffffff"}},
 		{name: "strokes", values: []string{"#", ".", "-", "█"}},
-		{name: "width", values: []string{"◼", "◼◼", "◼◼◼"}},
+		{name: "width", values: []string{"s", "m", "l"}},
 	},
 	padding:      "    ",
 	interPadding: "   ",
@@ -176,14 +186,16 @@ type toolbarModel struct {
 	height          int
 	hitboxes        map[string][]int
 	visibleElements []string
+	strokeHeight    int
 }
 
 var toolbarStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Background(lipgloss.Color("#485356"))
 
-func (m model) toolbarInit() model {
+func (m *model) toolbarInit() {
 	m.toolbar.visibleElements = []string{"colors", "strokes", "width"}
 	m.toolbar.hitboxes = make(map[string][]int, len(m.toolbar.visibleElements))
-	return m
+	m.toolbar.strokeHeight = 1
+
 }
 
 func (m model) toolbarView() string {
@@ -197,7 +209,7 @@ func (m model) toolbarView() string {
 	}
 
 	for _, elem := range toolbar.elements[1:] {
-		finalArr = append(finalArr, (toolbar.padding + toolbar.padding))
+		finalArr = append(finalArr, (toolbar.padding), toolbar.padding)
 		for _, val := range elem.values {
 			finalArr = append(finalArr, (toolbar.interPadding + val))
 		}
@@ -227,7 +239,7 @@ func (m model) toolbarView() string {
 			m.toolbar.hitboxes[element.name] = append(m.toolbar.hitboxes[element.name], offset)
 			offset += charLen
 		}
-		offset += lipgloss.Width(toolbar.padding)*2 + lipgloss.Width(toolbar.interPadding)
+		offset += lipgloss.Width(toolbar.padding) + lipgloss.Width(toolbar.interPadding)*2
 	}
 
 	//for TESTING
@@ -266,5 +278,7 @@ func (m *model) readHitboxes(key string, x int, i int) {
 		cursorStyle = cursorStyle.Foreground(lipgloss.Color(toolbar.elements[0].values[i]))
 	case "strokes":
 		m.brush = toolbar.elements[1].values[i]
+	case "width":
+		m.toolbar.strokeHeight = i + 1
 	}
 }
