@@ -27,10 +27,18 @@ var cursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(0))
 func main() {
 	m := model{}
 	m.brush = "#"
+	f, err := tea.LogToFile("debug.log", "debug")
+	f.Truncate(0)
+	if err != nil {
+		fmt.Println("fatal:", err)
+		os.Exit(1)
+	}
+	defer f.Close()
 	if _, err := tea.NewProgram(m, tea.WithMouseAllMotion(), tea.WithAltScreen()).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}
+
 }
 
 func (m model) Init() tea.Cmd {
@@ -76,7 +84,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if w > 0 && h > 0 {
 			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 		}
-
+		m = m.toolbarInit()
 	case tea.MouseMsg:
 		m.mouseX = msg.X
 		m.mouseY = msg.Y
@@ -84,6 +92,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.MouseActionPress:
 			//checking whether the action was within toolbar or easel
 			if msg.X > m.width+1 {
+				m, _ = m.toolbarUpdate(msg)
 			}
 			m.clicking = true
 		case tea.MouseActionRelease:
@@ -91,12 +100,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.MouseActionMotion:
 			//checking whether the action was within toolbar or easel
 			if msg.X < len(m.matrix[0]) { //just in case
-				if msg.Y < m.toolbar.height+1 {
-
+				if msg.Y < m.toolbar.height {
+					m, _ = m.toolbarUpdate(msg)
 				} else {
 					if m.clicking {
 						if msg.Y < len(m.matrix) { // you never know ... could be a weird mouse spasm that would cause out of bounds and crash, so this is just in case
-							m.matrix[m.mouseY+-+m.toolbar.height][m.mouseX] = cursorStyle.Render(m.brush)
+							m.matrix[m.mouseY-m.toolbar.height][m.mouseX-1] = cursorStyle.Render(m.brush)
 						}
 					}
 				}
@@ -119,7 +128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e":
 			m.brush = " "
 		case "b":
-			m.brush = "#"
+			m.brush = "█"
 		case "c":
 			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 		}
@@ -137,57 +146,97 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Center, m.toolbarView(), final)
 }
 
-type colorOption struct {
-	color string
-	val   string
+type toolbarEntry struct {
+	name   string
+	values []string
 }
 
 var toolbar = struct {
-	colors       []colorOption
-	strokes      []string
-	width        []string
+	elements     []toolbarEntry
 	padding      string
 	interPadding string
 }{
-	colors: []colorOption{
-		{color: "red", val: "#ff0000"},
-		{color: "blue", val: "#0000ff"},
-		{color: "green", val: "#00ff00"},
+	elements: []toolbarEntry{
+		{name: "colors", values: []string{"#ff0000", "#0000ff", "#00ff00"}},
+		{name: "strokes", values: []string{"#", ".", "-"}},
+		{name: "width", values: []string{"◼", "◼◼", "◼◼◼"}},
 	},
-	strokes:      []string{"#", ".", "-"},
-	width:        []string{"◼", "◼◼", "◼◼◼"},
 	padding:      "    ",
 	interPadding: " ",
 }
 
 type toolbarModel struct {
-	width  int
-	height int
+	width           int
+	height          int
+	hitboxes        map[string][]int
+	visibleElements []string
 }
 
 var toolbarStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
+
+func (m model) toolbarInit() model {
+	m.toolbar.visibleElements = []string{"colors", "strokes", "width"}
+	m.toolbar.hitboxes = make(map[string][]int, len(m.toolbar.visibleElements))
+	return m
+}
 
 func (m model) toolbarView() string {
 	// colors
 
 	colorChar := "⬤"
-	colorStr := toolbar.padding
-
-	for _, color := range toolbar.colors {
-		colorStr = colorStr + toolbar.interPadding + toolbar.interPadding + lipgloss.NewStyle().Foreground(lipgloss.Color(color.val)).Render(colorChar)
+	finalArr := []string{toolbar.padding}
+	//special case for colors
+	for _, color := range toolbar.elements[0].values {
+		finalArr = append(finalArr, (toolbar.interPadding + toolbar.interPadding + lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(colorChar)))
 	}
-	colorStr += toolbar.padding
-	strokeStr := toolbar.padding
-	for _, stroke := range toolbar.strokes {
-		strokeStr = strokeStr + toolbar.interPadding + stroke
-	}
-	strokeStr += toolbar.padding
 
-	widthStr := toolbar.padding
-	for _, width := range toolbar.width {
-		widthStr = widthStr + toolbar.interPadding + width
+	for _, elem := range toolbar.elements[1:] {
+		finalArr = append(finalArr, (toolbar.padding + toolbar.padding))
+		for _, val := range elem.values {
+			finalArr = append(finalArr, (toolbar.interPadding + val))
+		}
 	}
-	widthStr += toolbar.padding
 
-	return toolbarStyle.Render(lipgloss.JoinHorizontal(lipgloss.Center, colorStr, strokeStr, widthStr))
+	//calculating hitboxes
+	finalStr := lipgloss.JoinHorizontal(lipgloss.Center, finalArr...)
+	/*
+		lenOfStrs := 0
+		for _, str := range finalArr {
+			lenOfStrs += lipgloss.Width(str)
+		}
+		start := m.width/2 - (lenOfStrs / 2) + lipgloss.Width(toolbar.padding)*2 - 1
+
+		for _, element := range m.toolbar.visibleElements[:2] {
+			//assuming each 'styling' thing has three elements - maybe change later
+
+			m.toolbar.hitboxes[element] = []int{start, start + lipgloss.Width(toolbar.interPadding) + 1, start + lipgloss.Width(toolbar.interPadding)*2 + 2}
+			start += lipgloss.Width(toolbar.padding)*3 + 3
+		}
+
+		//for TESTING
+		for _, xArr := range m.toolbar.hitboxes {
+			for _, x := range xArr {
+				m.matrix[30][x] = "*"
+			}
+		}
+	*/
+	return toolbarStyle.Render(finalStr)
+}
+
+func (m model) toolbarUpdate(msg tea.Msg) (model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		switch msg.Action {
+		case tea.MouseActionPress:
+			for name, hitbox := range m.toolbar.hitboxes {
+				for _, xCoord := range hitbox {
+					if msg.X == xCoord { //&& (msg.Y == m.toolbar.height/2-1) {
+						log.Print(name)
+					}
+				}
+			}
+		}
+
+	}
+	return m, nil
 }
