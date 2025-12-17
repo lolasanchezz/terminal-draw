@@ -79,7 +79,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = h
 
 		//padding := 2
-		height := 5
+		height := 6
 		m.toolbar.height = height
 		//	m.toolbar.width = w - (2 * padding)
 		toolbarStyle = lipgloss.NewStyle().
@@ -111,13 +111,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m, _ = m.toolbarUpdate(msg)
 				} else {
 					if m.clicking {
-						if msg.Y < len(m.matrix) {
+						if msg.Y-m.toolbar.height < len(m.matrix) {
 							if m.toolbar.strokeHeight == 1 {
-								m.matrix[m.mouseY-m.toolbar.height][m.mouseX-1] = cursorStyle.Render(m.brush)
+								if m.mouseX != 0 {
+									m.matrix[m.mouseY-m.toolbar.height][m.mouseX-1] = cursorStyle.Render(m.brush)
+								}
 							} else {
+
 								for i := range m.toolbar.strokeHeight {
 									for j := range m.toolbar.strokeHeight {
-										m.matrix[m.mouseY-m.toolbar.height-i][m.mouseX-1-j] = cursorStyle.Render(m.brush)
+										if (0 < m.mouseY-m.toolbar.height-i) && (0 < m.mouseX-1-j) {
+											m.matrix[m.mouseY-m.toolbar.height-i][m.mouseX-1-j] = cursorStyle.Render(m.brush)
+										}
 									}
 								}
 							}
@@ -146,7 +151,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "b":
 			m.brush = "█"
 		case "c":
-			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
+			m.matrix = makeMatrix(m.width, m.height)
 		}
 	}
 	return m, nil
