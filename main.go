@@ -90,7 +90,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if w > 0 && h > 0 {
 			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 		}
+	case tea.WindowSizeMsg:
+		//window is getting expanded vertically
+		if (msg.Height != 0) && (msg.Width != 0) {
+			if msg.Height > m.height {
+				m.matrix = append(m.matrix, makeMatrix(m.width, msg.Height-m.height)...)
+			}
+			if msg.Height < m.height {
+				m.matrix = m.matrix[:msg.Height-m.toolbar.height]
+			}
+			if msg.Width < m.width {
+				for i := range m.matrix {
+					m.matrix[i] = m.matrix[i][:msg.Width]
+					m.matrix[i][msg.Width-1] = "\n"
+				}
+			}
+			if msg.Width > m.width {
+				newArr := make([]string, msg.Width-m.width)
+				for i := range newArr {
+					newArr[i] = " "
+				}
+				for i := range m.matrix {
+					m.matrix[i] = append(m.matrix[i], newArr...)
+					m.matrix[i][m.width-1] = " "
+					m.matrix[i][msg.Width-1] = "\n"
+				}
 
+			}
+			m.width = msg.Width
+			m.height = msg.Height
+		}
 	case tea.MouseMsg:
 		m.mouseX = msg.X
 		m.mouseY = msg.Y
@@ -151,7 +180,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "b":
 			m.brush = "█"
 		case "c":
-			m.matrix = makeMatrix(m.width, m.height)
+			m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 		}
 	}
 	return m, nil
@@ -178,9 +207,10 @@ var toolbar = struct {
 	interPadding string
 }{
 	elements: []toolbarEntry{
-		{name: "colors", values: []string{"#ff0000", "#0000ff", "#00ff00", "#ffffff"}},
+		{name: "colors", values: []string{"#ff0000", "#0000ff", "#00ff00", "#ffffff", "#f7de04", "#ff8103"}},
 		{name: "strokes", values: []string{"#", ".", "-", "█"}},
 		{name: "width", values: []string{"s", "m", "l"}},
+		{name: "clear", values: []string{"c"}},
 	},
 	padding:      "    ",
 	interPadding: "   ",
@@ -197,7 +227,7 @@ type toolbarModel struct {
 var toolbarStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Background(lipgloss.Color("#485356"))
 
 func (m *model) toolbarInit() {
-	m.toolbar.visibleElements = []string{"colors", "strokes", "width"}
+	m.toolbar.visibleElements = []string{"colors", "strokes", "width", "clear"}
 	m.toolbar.hitboxes = make(map[string][]int, len(m.toolbar.visibleElements))
 	m.toolbar.strokeHeight = 1
 
@@ -248,13 +278,15 @@ func (m model) toolbarView() string {
 	}
 
 	//for TESTING
-	if len(m.matrix) != 0 {
-		for _, xArr := range m.toolbar.hitboxes {
-			for _, x := range xArr {
-				m.matrix[0][x] = "*"
+	/*
+		if len(m.matrix) != 0 {
+			for _, xArr := range m.toolbar.hitboxes {
+				for _, x := range xArr {
+					m.matrix[0][x] = "*"
+				}
 			}
 		}
-	}
+	*/
 	return toolbarStyle.Render(finalStr)
 }
 
@@ -285,5 +317,7 @@ func (m *model) readHitboxes(key string, x int, i int) {
 		m.brush = toolbar.elements[1].values[i]
 	case "width":
 		m.toolbar.strokeHeight = i + 1
+	case "clear":
+		m.matrix = makeMatrix(m.width, m.height-m.toolbar.height)
 	}
 }
